@@ -38,9 +38,24 @@ output "ecs_cluster_name" {
   value       = aws_ecs_cluster.main.name
 }
 
-output "ecs_service_name" {
-  description = "ECS Service name"
-  value       = aws_ecs_service.api.name
+output "ecs_internal_service_name" {
+  description = "ECS Internal Service name"
+  value       = aws_ecs_service.internal.name
+}
+
+output "ecs_external_service_name" {
+  description = "ECS External Service name"
+  value       = aws_ecs_service.external.name
+}
+
+output "internal_target_group_arn" {
+  description = "Internal service target group ARN"
+  value       = aws_lb_target_group.internal.arn
+}
+
+output "external_target_group_arn" {
+  description = "External service target group ARN"
+  value       = aws_lb_target_group.external.arn
 }
 
 output "vpc_id" {

@@ -26,26 +26,32 @@ deploy: ## Deploy infrastructure to AWS
 	@echo "Deployment complete!"
 	@echo "API URL: $$(cd $(TERRAFORM_DIR) && terraform output -raw alb_url)"
 
-update: ## Rebuild Docker image and update ECS service
-	@echo "Rebuilding Docker image..."
-	@ECR_URL=$$(cd $(TERRAFORM_DIR) && terraform output -raw ecr_repository_url) && \
-	CLUSTER=$$(cd $(TERRAFORM_DIR) && terraform output -raw ecs_cluster_name) && \
-	SERVICE=$$(cd $(TERRAFORM_DIR) && terraform output -raw ecs_service_name) && \
-	echo "Logging in to ECR..." && \
-	aws ecr get-login-password --region $(AWS_REGION) | docker login --username AWS --password-stdin $$ECR_URL && \
-	echo "Building Docker image for linux/amd64..." && \
-	docker build --platform linux/amd64 -t $(PROJECT_NAME)-api . && \
-	echo "Tagging image..." && \
-	docker tag $(PROJECT_NAME)-api:latest $$ECR_URL:latest && \
-	echo "Pushing image to ECR..." && \
-	docker push $$ECR_URL:latest && \
-	echo "Forcing ECS service to deploy new image..." && \
+update: ## Rebuild Docker image and update both ECS services using Terraform
+	@echo "Updating application code..."
+	@echo "Forcing Terraform to rebuild Docker image..."
+	@cd $(TERRAFORM_DIR) && terraform taint docker_image.gospital
+	@cd $(TERRAFORM_DIR) && terraform taint docker_registry_image.gospital
+	@echo "Rebuilding and pushing image via Terraform Docker provider..."
+	@cd $(TERRAFORM_DIR) && terraform apply \
+		-var="db_password=$(DB_PASSWORD)" \
+		-target=docker_image.gospital \
+		-target=docker_registry_image.gospital \
+		-auto-approve
+	@echo "Forcing ECS services to redeploy with new image..."
+	@CLUSTER=$$(cd $(TERRAFORM_DIR) && terraform output -raw ecs_cluster_name) && \
+	INTERNAL_SERVICE=$$(cd $(TERRAFORM_DIR) && terraform output -raw ecs_internal_service_name) && \
+	EXTERNAL_SERVICE=$$(cd $(TERRAFORM_DIR) && terraform output -raw ecs_external_service_name) && \
 	aws ecs update-service \
 		--cluster $$CLUSTER \
-		--service $$SERVICE \
+		--service $$INTERNAL_SERVICE \
 		--force-new-deployment \
 		--region $(AWS_REGION) > /dev/null && \
-	echo "Update complete! New image deployed to ECS."
+	aws ecs update-service \
+		--cluster $$CLUSTER \
+		--service $$EXTERNAL_SERVICE \
+		--force-new-deployment \
+		--region $(AWS_REGION) > /dev/null && \
+	echo "Update complete! New image deployed to both services."
 
 destroy: ## Destroy all infrastructure
 	@echo "WARNING: This will destroy all infrastructure!"
@@ -61,32 +67,53 @@ destroy: ## Destroy all infrastructure
 		echo "Destroy cancelled."; \
 	fi
 
-start: ## Start ECS service (scale to desired count)
-	@echo "Starting ECS service..."
+start: ## Start both ECS services
+	@echo "Starting both ECS services..."
 	@CLUSTER=$$(cd $(TERRAFORM_DIR) && terraform output -raw ecs_cluster_name) && \
-	SERVICE=$$(cd $(TERRAFORM_DIR) && terraform output -raw ecs_service_name) && \
+	INTERNAL_SERVICE=$$(cd $(TERRAFORM_DIR) && terraform output -raw ecs_internal_service_name) && \
+	EXTERNAL_SERVICE=$$(cd $(TERRAFORM_DIR) && terraform output -raw ecs_external_service_name) && \
 	aws ecs update-service \
 		--cluster $$CLUSTER \
-		--service $$SERVICE \
-		--desired-count 2 \
-		--region $(AWS_REGION)
-	@echo "ECS service started."
+		--service $$INTERNAL_SERVICE \
+		--desired-count 1 \
+		--region $(AWS_REGION) > /dev/null && \
+	aws ecs update-service \
+		--cluster $$CLUSTER \
+		--service $$EXTERNAL_SERVICE \
+		--desired-count 1 \
+		--region $(AWS_REGION) > /dev/null && \
+	echo "Both services started."
 
-stop: ## Stop ECS service (scale to 0)
-	@echo "Stopping ECS service..."
+stop: ## Stop both ECS services
+	@echo "Stopping both ECS services..."
 	@CLUSTER=$$(cd $(TERRAFORM_DIR) && terraform output -raw ecs_cluster_name) && \
-	SERVICE=$$(cd $(TERRAFORM_DIR) && terraform output -raw ecs_service_name) && \
+	INTERNAL_SERVICE=$$(cd $(TERRAFORM_DIR) && terraform output -raw ecs_internal_service_name) && \
+	EXTERNAL_SERVICE=$$(cd $(TERRAFORM_DIR) && terraform output -raw ecs_external_service_name) && \
 	aws ecs update-service \
 		--cluster $$CLUSTER \
-		--service $$SERVICE \
+		--service $$INTERNAL_SERVICE \
 		--desired-count 0 \
-		--region $(AWS_REGION)
-	@echo "ECS service stopped."
+		--region $(AWS_REGION) > /dev/null && \
+	aws ecs update-service \
+		--cluster $$CLUSTER \
+		--service $$EXTERNAL_SERVICE \
+		--desired-count 0 \
+		--region $(AWS_REGION) > /dev/null && \
+	echo "Both services stopped."
 
 log: ## View ECS service logs
-	@echo "Fetching ECS logs..."
-	@CLUSTER=$$(cd $(TERRAFORM_DIR) && terraform output -raw ecs_cluster_name) && \
-	SERVICE=$$(cd $(TERRAFORM_DIR) && terraform output -raw ecs_service_name) && \
+	@echo "Select service:"
+	@echo "  1) Internal (staff)"
+	@echo "  2) External (public)"
+	@read -p "Choice [1-2]: " choice; \
+	CLUSTER=$$(cd $(TERRAFORM_DIR) && terraform output -raw ecs_cluster_name) && \
+	if [ "$$choice" = "1" ]; then \
+		SERVICE=$$(cd $(TERRAFORM_DIR) && terraform output -raw ecs_internal_service_name); \
+		echo "Streaming internal service logs..."; \
+	else \
+		SERVICE=$$(cd $(TERRAFORM_DIR) && terraform output -raw ecs_external_service_name); \
+		echo "Streaming external service logs..."; \
+	fi && \
 	TASK=$$(aws ecs list-tasks --cluster $$CLUSTER --service-name $$SERVICE --region $(AWS_REGION) --query 'taskArns[0]' --output text) && \
 	if [ "$$TASK" = "None" ] || [ -z "$$TASK" ]; then \
 		echo "No running tasks found."; \
@@ -96,9 +123,18 @@ log: ## View ECS service logs
 	fi
 
 shell: ## Get shell access to running ECS container
-	@echo "Connecting to ECS container..."
-	@CLUSTER=$$(cd $(TERRAFORM_DIR) && terraform output -raw ecs_cluster_name) && \
-	SERVICE=$$(cd $(TERRAFORM_DIR) && terraform output -raw ecs_service_name) && \
+	@echo "Select service:"
+	@echo "  1) Internal (staff)"
+	@echo "  2) External (public)"
+	@read -p "Choice [1-2]: " choice; \
+	CLUSTER=$$(cd $(TERRAFORM_DIR) && terraform output -raw ecs_cluster_name) && \
+	if [ "$$choice" = "1" ]; then \
+		SERVICE=$$(cd $(TERRAFORM_DIR) && terraform output -raw ecs_internal_service_name); \
+		echo "Connecting to internal service..."; \
+	else \
+		SERVICE=$$(cd $(TERRAFORM_DIR) && terraform output -raw ecs_external_service_name); \
+		echo "Connecting to external service..."; \
+	fi && \
 	TASK=$$(aws ecs list-tasks --cluster $$CLUSTER --service-name $$SERVICE --region $(AWS_REGION) --query 'taskArns[0]' --output text) && \
 	if [ "$$TASK" = "None" ] || [ -z "$$TASK" ]; then \
 		echo "No running tasks found. Start the service first with 'make start'"; \
@@ -130,7 +166,8 @@ status: ## Show deployment status
 		echo "API URL: $$(cd $(TERRAFORM_DIR) && terraform output -raw alb_url 2>/dev/null || echo 'Not deployed')"; \
 		echo "RDS Endpoint: $$(cd $(TERRAFORM_DIR) && terraform output -raw rds_endpoint 2>/dev/null || echo 'Not deployed')"; \
 		echo "ECS Cluster: $$(cd $(TERRAFORM_DIR) && terraform output -raw ecs_cluster_name 2>/dev/null || echo 'Not deployed')"; \
-		echo "ECS Service: $$(cd $(TERRAFORM_DIR) && terraform output -raw ecs_service_name 2>/dev/null || echo 'Not deployed')"; \
+		echo "Internal Service: $$(cd $(TERRAFORM_DIR) && terraform output -raw ecs_internal_service_name 2>/dev/null || echo 'Not deployed')"; \
+		echo "External Service: $$(cd $(TERRAFORM_DIR) && terraform output -raw ecs_external_service_name 2>/dev/null || echo 'Not deployed')"; \
 	else \
 		echo "Infrastructure not deployed yet."; \
 	fi

@@ -10,6 +10,12 @@ import (
 	"github.com/LuoZihYuan/gospital/internal/middleware"
 )
 
+// CPU Circuit Breaker Configuration
+const (
+	cpuOverloadThreshold = 95.0 // CPU percentage to open circuit (reject requests)
+	cpuRecoveryThreshold = 85.0 // CPU percentage to close circuit (resume requests)
+)
+
 // SetupRouter configures all routes for the API
 func SetupRouter(
 	rootHandler *handlers.RootHandler,
@@ -22,13 +28,16 @@ func SetupRouter(
 ) *gin.Engine {
 	router := gin.Default()
 
-	// Root endpoints (no bulkhead protection)
+	// Initialize CPU circuit breaker
+	cpuCircuitBreaker := middleware.NewCPUCircuitBreaker(cpuOverloadThreshold, cpuRecoveryThreshold)
+
+	// Root endpoints (no circuit breaker - always available)
 	router.GET("/health", rootHandler.HealthCheck)
 	router.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))
 
-	// API routes (with bulkhead protection)
+	// API routes (with CPU circuit breaker protection)
 	api := router.Group("/api")
-	api.Use(middleware.BulkheadMiddleware()) // Apply bulkhead to all /api routes
+	api.Use(middleware.CPUCircuitBreakerMiddleware(cpuCircuitBreaker))
 	{
 		// API v1 routes
 		v1 := api.Group("/v1")

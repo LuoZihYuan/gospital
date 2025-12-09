@@ -1,3 +1,7 @@
+# ============================================================================
+# GENERAL CONFIGURATION
+# ============================================================================
+
 variable "aws_region" {
   description = "AWS region for deployment"
   type        = string
@@ -10,6 +14,10 @@ variable "project_name" {
   default     = "gospital"
 }
 
+# ============================================================================
+# NETWORK CONFIGURATION
+# ============================================================================
+
 variable "vpc_cidr" {
   description = "CIDR block for VPC"
   type        = string
@@ -21,6 +29,16 @@ variable "availability_zones" {
   type        = list(string)
   default     = ["us-west-2a", "us-west-2b"]
 }
+
+variable "allowed_cidr_blocks" {
+  description = "CIDR blocks allowed to connect to RDS for migrations (your IP)"
+  type        = list(string)
+  default     = ["0.0.0.0/0"] # Change to your IP for security (e.g., ["1.2.3.4/32"])
+}
+
+# ============================================================================
+# DATABASE CONFIGURATION (RDS MySQL)
+# ============================================================================
 
 variable "db_username" {
   description = "RDS master username"
@@ -47,6 +65,10 @@ variable "db_instance_class" {
   default     = "db.t3.micro"
 }
 
+# ============================================================================
+# DYNAMODB CONFIGURATION
+# ============================================================================
+
 variable "medical_records_table" {
   description = "DynamoDB table name for medical records"
   type        = string
@@ -58,6 +80,10 @@ variable "invoices_table" {
   type        = string
   default     = "invoices"
 }
+
+# ============================================================================
+# ECS CONTAINER CONFIGURATION
+# ============================================================================
 
 variable "container_cpu" {
   description = "Fargate task CPU units (256 = 0.25 vCPU)"
@@ -71,20 +97,74 @@ variable "container_memory" {
   default     = 512
 }
 
-variable "ecs_desired_count" {
-  description = "Desired number of ECS tasks"
-  type        = number
-  default     = 2
-}
-
 variable "container_port" {
   description = "Container port for the application"
   type        = number
   default     = 8080
 }
 
-variable "allowed_cidr_blocks" {
-  description = "CIDR blocks allowed to connect to RDS for migrations (your IP)"
-  type        = list(string)
-  default     = ["0.0.0.0/0"] # Change to your IP for security (e.g., ["1.2.3.4/32"])
+# ============================================================================
+# ECS SERVICE CONFIGURATION (Internal Service - Staff)
+# ============================================================================
+
+variable "internal_desired_count" {
+  description = "Desired number of tasks for internal service"
+  type        = number
+  default     = 1
+}
+
+variable "internal_min_tasks" {
+  description = "Minimum number of tasks for internal service auto-scaling"
+  type        = number
+  default     = 1
+}
+
+variable "internal_max_tasks" {
+  description = "Maximum number of tasks for internal service auto-scaling"
+  type        = number
+  default     = 10
+}
+
+# ============================================================================
+# ECS SERVICE CONFIGURATION (External Service - Public)
+# ============================================================================
+
+variable "external_desired_count" {
+  description = "Desired number of tasks for external service"
+  type        = number
+  default     = 1
+}
+
+variable "external_min_tasks" {
+  description = "Minimum number of tasks for external service auto-scaling"
+  type        = number
+  default     = 1
+}
+
+variable "external_max_tasks" {
+  description = "Maximum number of tasks for external service auto-scaling"
+  type        = number
+  default     = 10
+}
+
+# ============================================================================
+# AUTO-SCALING CONFIGURATION
+# ============================================================================
+
+variable "autoscaling_cpu_target" {
+  description = "Target CPU utilization percentage for auto-scaling"
+  type        = number
+  default     = 75.0
+}
+
+variable "autoscaling_memory_target" {
+  description = "Target memory utilization percentage for auto-scaling"
+  type        = number
+  default     = 80.0
+}
+
+variable "autoscaling_scale_in_cooldown" {
+  description = "Cooldown period (seconds) before scaling in (removing tasks)"
+  type        = number
+  default     = 180
 }
