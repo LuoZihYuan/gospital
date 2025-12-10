@@ -33,7 +33,7 @@ variable "availability_zones" {
 variable "allowed_cidr_blocks" {
   description = "CIDR blocks allowed to connect to RDS for migrations (your IP)"
   type        = list(string)
-  default     = ["0.0.0.0/0"] # Change to your IP for security (e.g., ["1.2.3.4/32"])
+  default     = ["0.0.0.0/0"]
 }
 
 # ============================================================================
@@ -50,6 +50,7 @@ variable "db_username" {
 variable "db_password" {
   description = "RDS master password"
   type        = string
+  default     = "GospitalSecure123"
   sensitive   = true
 }
 

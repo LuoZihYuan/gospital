@@ -1,4 +1,7 @@
-# Security Group for ALB
+# ============================================================================
+# SECURITY GROUP FOR ALB
+# ============================================================================
+
 resource "aws_security_group" "alb" {
   name        = "${var.project_name}-alb-sg"
   description = "Security group for Application Load Balancer"
@@ -33,7 +36,10 @@ resource "aws_security_group" "alb" {
   }
 }
 
-# Security Group for ECS Tasks
+# ============================================================================
+# SECURITY GROUP FOR ECS TASKS
+# ============================================================================
+
 resource "aws_security_group" "ecs_tasks" {
   name        = "${var.project_name}-ecs-tasks-sg"
   description = "Security group for ECS tasks"
@@ -46,6 +52,9 @@ resource "aws_security_group" "ecs_tasks" {
     protocol        = "tcp"
     security_groups = [aws_security_group.alb.id]
   }
+
+  # Note: Prometheus scraping rule is added in observability.tf
+  # via aws_security_group_rule.ecs_from_prometheus
 
   egress {
     description = "Allow all outbound traffic"
@@ -60,7 +69,10 @@ resource "aws_security_group" "ecs_tasks" {
   }
 }
 
-# Security Group for RDS
+# ============================================================================
+# SECURITY GROUP FOR RDS
+# ============================================================================
+
 resource "aws_security_group" "rds" {
   name        = "${var.project_name}-rds-sg"
   description = "Security group for RDS MySQL"

@@ -1,4 +1,7 @@
-# ECS Cluster
+# ============================================================================
+# ECS CLUSTER
+# ============================================================================
+
 resource "aws_ecs_cluster" "main" {
   name = "${var.project_name}-cluster"
 
@@ -12,7 +15,6 @@ resource "aws_ecs_cluster" "main" {
   }
 }
 
-# CloudWatch Log Group for ECS
 resource "aws_cloudwatch_log_group" "ecs" {
   name              = "/ecs/${var.project_name}"
   retention_in_days = 7
@@ -26,15 +28,14 @@ resource "aws_cloudwatch_log_group" "ecs" {
 # INTERNAL SERVICE (Staff Operations)
 # ============================================================================
 
-# Task Definition for Internal Service
 resource "aws_ecs_task_definition" "internal" {
   family                   = "${var.project_name}-internal"
   requires_compatibilities = ["FARGATE"]
   network_mode             = "awsvpc"
   cpu                      = var.container_cpu
   memory                   = var.container_memory
-  execution_role_arn       = data.aws_iam_role.lab_role.arn
-  task_role_arn            = data.aws_iam_role.lab_role.arn
+  execution_role_arn       = aws_iam_role.ecs_task_execution_role.arn
+  task_role_arn            = aws_iam_role.ecs_task_role.arn
 
   container_definitions = jsonencode([
     {
@@ -100,7 +101,6 @@ resource "aws_ecs_task_definition" "internal" {
   }
 }
 
-# ECS Service for Internal (Staff)
 resource "aws_ecs_service" "internal" {
   name            = "${var.project_name}-internal-service"
   cluster         = aws_ecs_cluster.main.id
@@ -120,10 +120,22 @@ resource "aws_ecs_service" "internal" {
     container_port   = var.container_port
   }
 
-  health_check_grace_period_seconds = 60
+  service_registries {
+    registry_arn = aws_service_discovery_service.internal.arn
+  }
+
+  # FIXED: Increased grace period to account for container startPeriod (60s)
+  # plus ALB health check interval (30s) plus buffer
+  health_check_grace_period_seconds = 120
 
   deployment_maximum_percent         = 200
   deployment_minimum_healthy_percent = 100
+
+  # FIXED: Added deployment circuit breaker for automatic rollback on failed deployments
+  deployment_circuit_breaker {
+    enable   = true
+    rollback = true
+  }
 
   lifecycle {
     ignore_changes = [desired_count]
@@ -135,7 +147,9 @@ resource "aws_ecs_service" "internal" {
     aws_lb_listener.http,
     aws_db_instance.mysql,
     aws_dynamodb_table.medical_records,
-    aws_dynamodb_table.invoices
+    aws_dynamodb_table.invoices,
+    aws_service_discovery_service.internal,
+    aws_service_discovery_private_dns_namespace.main
   ]
 
   tags = {
@@ -143,7 +157,6 @@ resource "aws_ecs_service" "internal" {
   }
 }
 
-# Auto-Scaling Target for Internal Service
 resource "aws_appautoscaling_target" "internal" {
   max_capacity       = var.internal_max_tasks
   min_capacity       = var.internal_min_tasks
@@ -152,7 +165,6 @@ resource "aws_appautoscaling_target" "internal" {
   service_namespace  = "ecs"
 }
 
-# CPU-based Auto-Scaling Policy for Internal Service
 resource "aws_appautoscaling_policy" "internal_cpu" {
   name               = "${var.project_name}-internal-cpu-scaling"
   policy_type        = "TargetTrackingScaling"
@@ -171,7 +183,6 @@ resource "aws_appautoscaling_policy" "internal_cpu" {
   }
 }
 
-# Memory-based Auto-Scaling Policy for Internal Service
 resource "aws_appautoscaling_policy" "internal_memory" {
   name               = "${var.project_name}-internal-memory-scaling"
   policy_type        = "TargetTrackingScaling"
@@ -194,15 +205,14 @@ resource "aws_appautoscaling_policy" "internal_memory" {
 # EXTERNAL SERVICE (Public/Patient Operations)
 # ============================================================================
 
-# Task Definition for External Service
 resource "aws_ecs_task_definition" "external" {
   family                   = "${var.project_name}-external"
   requires_compatibilities = ["FARGATE"]
   network_mode             = "awsvpc"
   cpu                      = var.container_cpu
   memory                   = var.container_memory
-  execution_role_arn       = data.aws_iam_role.lab_role.arn
-  task_role_arn            = data.aws_iam_role.lab_role.arn
+  execution_role_arn       = aws_iam_role.ecs_task_execution_role.arn
+  task_role_arn            = aws_iam_role.ecs_task_role.arn
 
   container_definitions = jsonencode([
     {
@@ -268,7 +278,6 @@ resource "aws_ecs_task_definition" "external" {
   }
 }
 
-# ECS Service for External (Public)
 resource "aws_ecs_service" "external" {
   name            = "${var.project_name}-external-service"
   cluster         = aws_ecs_cluster.main.id
@@ -288,10 +297,22 @@ resource "aws_ecs_service" "external" {
     container_port   = var.container_port
   }
 
-  health_check_grace_period_seconds = 60
+  service_registries {
+    registry_arn = aws_service_discovery_service.external.arn
+  }
+
+  # FIXED: Increased grace period to account for container startPeriod (60s)
+  # plus ALB health check interval (30s) plus buffer
+  health_check_grace_period_seconds = 120
 
   deployment_maximum_percent         = 200
   deployment_minimum_healthy_percent = 100
+
+  # FIXED: Added deployment circuit breaker for automatic rollback on failed deployments
+  deployment_circuit_breaker {
+    enable   = true
+    rollback = true
+  }
 
   lifecycle {
     ignore_changes = [desired_count]
@@ -303,7 +324,9 @@ resource "aws_ecs_service" "external" {
     aws_lb_listener.http,
     aws_db_instance.mysql,
     aws_dynamodb_table.medical_records,
-    aws_dynamodb_table.invoices
+    aws_dynamodb_table.invoices,
+    aws_service_discovery_service.external,
+    aws_service_discovery_private_dns_namespace.main
   ]
 
   tags = {
@@ -311,7 +334,6 @@ resource "aws_ecs_service" "external" {
   }
 }
 
-# Auto-Scaling Target for External Service
 resource "aws_appautoscaling_target" "external" {
   max_capacity       = var.external_max_tasks
   min_capacity       = var.external_min_tasks
@@ -320,7 +342,6 @@ resource "aws_appautoscaling_target" "external" {
   service_namespace  = "ecs"
 }
 
-# CPU-based Auto-Scaling Policy for External Service
 resource "aws_appautoscaling_policy" "external_cpu" {
   name               = "${var.project_name}-external-cpu-scaling"
   policy_type        = "TargetTrackingScaling"
@@ -339,7 +360,6 @@ resource "aws_appautoscaling_policy" "external_cpu" {
   }
 }
 
-# Memory-based Auto-Scaling Policy for External Service
 resource "aws_appautoscaling_policy" "external_memory" {
   name               = "${var.project_name}-external-memory-scaling"
   policy_type        = "TargetTrackingScaling"

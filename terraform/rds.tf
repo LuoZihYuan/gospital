@@ -24,12 +24,12 @@ resource "aws_db_instance" "mysql" {
   username = var.db_username
   password = var.db_password
 
-  multi_az               = true
+  multi_az               = false # Single AZ for free tier
   db_subnet_group_name   = aws_db_subnet_group.main.name
   vpc_security_group_ids = [aws_security_group.rds.id]
   publicly_accessible    = true # Allow public access for migrations
 
-  backup_retention_period = 7
+  backup_retention_period = 1 # Reduced for free tier (was 7)
   backup_window           = "03:00-04:00"
   maintenance_window      = "mon:04:00-mon:05:00"
 

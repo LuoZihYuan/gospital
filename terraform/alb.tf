@@ -1,4 +1,7 @@
-# Application Load Balancer (Multi-AZ)
+# ============================================================================
+# APPLICATION LOAD BALANCER (Multi-AZ)
+# ============================================================================
+
 resource "aws_lb" "main" {
   name               = "${var.project_name}-alb"
   internal           = false
@@ -14,7 +17,10 @@ resource "aws_lb" "main" {
   }
 }
 
-# Target Group for Internal Service (Staff)
+# ============================================================================
+# TARGET GROUPS
+# ============================================================================
+
 resource "aws_lb_target_group" "internal" {
   name        = "${var.project_name}-internal-tg"
   port        = var.container_port
@@ -39,7 +45,6 @@ resource "aws_lb_target_group" "internal" {
   }
 }
 
-# Target Group for External Service (Public)
 resource "aws_lb_target_group" "external" {
   name        = "${var.project_name}-external-tg"
   port        = var.container_port
@@ -64,20 +69,21 @@ resource "aws_lb_target_group" "external" {
   }
 }
 
-# ALB Listener (HTTP) - Default to External
+# ============================================================================
+# ALB LISTENER & RULES
+# ============================================================================
+
 resource "aws_lb_listener" "http" {
   load_balancer_arn = aws_lb.main.arn
   port              = 80
   protocol          = "HTTP"
 
-  # Default action: Route to external service
   default_action {
     type             = "forward"
     target_group_arn = aws_lb_target_group.external.arn
   }
 }
 
-# Listener Rule: Route staff traffic to internal service
 resource "aws_lb_listener_rule" "internal" {
   listener_arn = aws_lb_listener.http.arn
   priority     = 100
@@ -99,7 +105,6 @@ resource "aws_lb_listener_rule" "internal" {
   }
 }
 
-# Listener Rule: Explicitly route public traffic to external service
 resource "aws_lb_listener_rule" "external" {
   listener_arn = aws_lb_listener.http.arn
   priority     = 200

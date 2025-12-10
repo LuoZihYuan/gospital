@@ -2,8 +2,6 @@ package main
 
 import (
 	"github.com/gin-gonic/gin"
-	swaggerFiles "github.com/swaggo/files"
-	ginSwagger "github.com/swaggo/gin-swagger"
 
 	_ "github.com/LuoZihYuan/gospital/docs" // Import generated docs
 	"github.com/LuoZihYuan/gospital/internal/handlers"
@@ -31,12 +29,14 @@ func SetupRouter(
 	// Initialize CPU circuit breaker
 	cpuCircuitBreaker := middleware.NewCPUCircuitBreaker(cpuOverloadThreshold, cpuRecoveryThreshold)
 
-	// Root endpoints (no circuit breaker - always available)
+	// Root endpoints (no middleware - always available)
 	router.GET("/health", rootHandler.HealthCheck)
-	router.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))
+	router.GET("/metrics", rootHandler.Metrics)
+	router.GET("/swagger/*any", rootHandler.Swagger)
 
-	// API routes (with CPU circuit breaker protection)
+	// API routes (with Prometheus metrics and CPU circuit breaker protection)
 	api := router.Group("/api")
+	api.Use(middleware.PrometheusMiddleware())
 	api.Use(middleware.CPUCircuitBreakerMiddleware(cpuCircuitBreaker))
 	{
 		// API v1 routes

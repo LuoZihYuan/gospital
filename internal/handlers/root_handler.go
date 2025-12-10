@@ -6,21 +6,26 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
+	swaggerFiles "github.com/swaggo/files"
+	ginSwagger "github.com/swaggo/gin-swagger"
 
 	"github.com/LuoZihYuan/gospital/internal/infrastructure"
 )
 
-// RootHandler handles root-level requests (health, version, etc.)
+// RootHandler handles root-level requests (health, metrics, swagger, etc.)
 type RootHandler struct {
-	mysqlClient  *infrastructure.MySQLClient
-	dynamoClient *infrastructure.DynamoDBClient
+	mysqlClient    *infrastructure.MySQLClient
+	dynamoClient   *infrastructure.DynamoDBClient
+	swaggerHandler gin.HandlerFunc
 }
 
 // NewRootHandler creates a new root handler
 func NewRootHandler(mysqlClient *infrastructure.MySQLClient, dynamoClient *infrastructure.DynamoDBClient) *RootHandler {
 	return &RootHandler{
-		mysqlClient:  mysqlClient,
-		dynamoClient: dynamoClient,
+		mysqlClient:    mysqlClient,
+		dynamoClient:   dynamoClient,
+		swaggerHandler: ginSwagger.WrapHandler(swaggerFiles.Handler),
 	}
 }
 
@@ -66,4 +71,26 @@ func (h *RootHandler) HealthCheck(c *gin.Context) {
 	}
 
 	c.JSON(statusCode, health)
+}
+
+// Metrics godoc
+// @Summary Prometheus metrics
+// @Description Expose Prometheus metrics for scraping
+// @Tags Root
+// @Produce text/plain
+// @Success 200 {string} string "Prometheus metrics"
+// @Router /metrics [get]
+func (h *RootHandler) Metrics(c *gin.Context) {
+	promhttp.Handler().ServeHTTP(c.Writer, c.Request)
+}
+
+// Swagger godoc
+// @Summary Swagger UI
+// @Description Serve Swagger UI for API documentation
+// @Tags Root
+// @Produce html
+// @Success 200 {string} string "Swagger UI"
+// @Router /swagger/{any} [get]
+func (h *RootHandler) Swagger(c *gin.Context) {
+	h.swaggerHandler(c)
 }

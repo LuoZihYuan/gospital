@@ -133,6 +133,10 @@ func (cb *CPUCircuitBreaker) monitorCPU() {
 		} else if shouldClose {
 			cb.isOpen = false
 		}
+
+		// Update Prometheus metrics
+		UpdateCPUCircuitBreakerMetrics(cb.isOpen, cb.currentCPU)
+
 		cb.mu.Unlock()
 
 		if shouldOpen {
@@ -211,6 +215,9 @@ func (cb *CPUCircuitBreaker) GetCurrentCPU() float64 {
 func CPUCircuitBreakerMiddleware(cb *CPUCircuitBreaker) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		if cb.IsOpen() {
+			// Increment rejection counter for Prometheus
+			IncrementCPURejections()
+
 			c.JSON(http.StatusServiceUnavailable, models.ErrorResponse{
 				Error: models.ErrorDetail{
 					Code:    "SERVICE_OVERLOADED",

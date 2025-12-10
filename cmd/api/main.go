@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"time"
 
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
@@ -77,6 +78,13 @@ func main() {
 	// Create DynamoDB client with circuit breaker
 	dynamoClient := infrastructure.NewDynamoDBClient(dynamoDBClient)
 
+	// Initialize metrics collectors
+	mysqlMetrics := infrastructure.NewMySQLMetricsCollector(mysqlDB)
+	runtimeMetrics := infrastructure.NewRuntimeMetricsCollector()
+
+	// Start metrics collection goroutine
+	go collectMetricsPeriodically(mysqlMetrics, runtimeMetrics)
+
 	// Initialize repositories
 	patientRepo := repository.NewPatientRepository(mysqlClient)
 	doctorRepo := repository.NewDoctorRepository(mysqlClient)
@@ -128,4 +136,15 @@ func getEnvOrFatal(key string) string {
 		log.Fatalf("Environment variable %s is required but not set", key)
 	}
 	return value
+}
+
+// collectMetricsPeriodically collects metrics at regular intervals
+func collectMetricsPeriodically(mysqlMetrics *infrastructure.MySQLMetricsCollector, runtimeMetrics *infrastructure.RuntimeMetricsCollector) {
+	ticker := time.NewTicker(5 * time.Second)
+	defer ticker.Stop()
+
+	for range ticker.C {
+		mysqlMetrics.Collect()
+		runtimeMetrics.Collect()
+	}
 }

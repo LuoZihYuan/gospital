@@ -2,10 +2,13 @@ package infrastructure
 
 import (
 	"context"
+	"log"
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
 	"github.com/sony/gobreaker"
+
+	"github.com/LuoZihYuan/gospital/internal/middleware"
 )
 
 // DynamoDBClient wraps DynamoDB client with circuit breaker
@@ -27,10 +30,14 @@ func NewDynamoDBClient(client *dynamodb.Client) *DynamoDBClient {
 			return counts.Requests >= 3 && failureRatio >= 0.6
 		},
 		OnStateChange: func(name string, from gobreaker.State, to gobreaker.State) {
-			// Log state changes (can be replaced with proper logging)
-			// fmt.Printf("Circuit Breaker '%s' changed from '%s' to '%s'\n", name, from, to)
+			log.Printf("Circuit Breaker '%s' changed from '%s' to '%s'\n", name, from.String(), to.String())
+			// Update Prometheus metric
+			middleware.UpdateDynamoDBCircuitBreakerState(to.String())
 		},
 	})
+
+	// Initialize metric to closed state
+	middleware.UpdateDynamoDBCircuitBreakerState("closed")
 
 	return &DynamoDBClient{
 		client: client,

@@ -3,9 +3,12 @@ package infrastructure
 import (
 	"context"
 	"database/sql"
+	"log"
 	"time"
 
 	"github.com/sony/gobreaker"
+
+	"github.com/LuoZihYuan/gospital/internal/middleware"
 )
 
 // MySQLClient wraps sql.DB with circuit breaker
@@ -46,10 +49,14 @@ func NewMySQLClient(db *sql.DB) *MySQLClient {
 			return counts.Requests >= 3 && failureRatio >= 0.6
 		},
 		OnStateChange: func(name string, from gobreaker.State, to gobreaker.State) {
-			// Log state changes (can be replaced with proper logging)
-			// fmt.Printf("Circuit Breaker '%s' changed from '%s' to '%s'\n", name, from, to)
+			log.Printf("Circuit Breaker '%s' changed from '%s' to '%s'\n", name, from.String(), to.String())
+			// Update Prometheus metric
+			middleware.UpdateMySQLCircuitBreakerState(to.String())
 		},
 	})
+
+	// Initialize metric to closed state
+	middleware.UpdateMySQLCircuitBreakerState("closed")
 
 	return &MySQLClient{
 		db: db,
@@ -73,7 +80,7 @@ func (c *MySQLClient) QueryRowContext(ctx context.Context, query string, args ..
 	row := c.db.QueryRowContext(ctx, query, args...)
 	return &CBRow{
 		row: row,
-		cb:  c.cb, // Share the same circuit breaker instance
+		cb:  c.cb,
 	}
 }
 
