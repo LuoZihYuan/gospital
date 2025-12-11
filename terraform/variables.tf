@@ -155,7 +155,7 @@ variable "external_max_tasks" {
 variable "autoscaling_cpu_target" {
   description = "Target CPU utilization percentage for auto-scaling"
   type        = number
-  default     = 75.0
+  default     = 50.0
 }
 
 variable "autoscaling_memory_target" {

@@ -60,12 +60,12 @@ func NewCPUCircuitBreaker(overloadThreshold, recoveryThreshold float64) *CPUCirc
 	cb := &CPUCircuitBreaker{
 		overloadThreshold: overloadThreshold,
 		recoveryThreshold: recoveryThreshold,
-		checkInterval:     1 * time.Second,
+		checkInterval:     100 * time.Millisecond, // Check every 0.1 second for faster response
 		isOpen:            false,
 		currentCPU:        0.0,
 		metadataURI:       metadataURI,
 		httpClient: &http.Client{
-			Timeout: 2 * time.Second,
+			Timeout: 500 * time.Millisecond, // Reduced timeout for faster checks
 		},
 	}
 
@@ -78,8 +78,8 @@ func NewCPUCircuitBreaker(overloadThreshold, recoveryThreshold float64) *CPUCirc
 
 	go cb.monitorCPU()
 
-	log.Printf("[CPU Circuit Breaker] Initialized (overload: %.1f%%, recovery: %.1f%%, limit: %.2f vCPU)",
-		overloadThreshold, recoveryThreshold, cb.taskCPULimit)
+	log.Printf("[CPU Circuit Breaker] Initialized (overload: %.1f%%, recovery: %.1f%%, limit: %.2f vCPU, interval: %v)",
+		overloadThreshold, recoveryThreshold, cb.taskCPULimit, cb.checkInterval)
 
 	return cb
 }
