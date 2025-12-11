@@ -444,7 +444,7 @@
     },
     {
       "datasource": { "type": "prometheus", "uid": "prometheus" },
-      "title": "MySQL Connection Pool",
+      "title": "Rejection Sources",
       "type": "timeseries",
       "gridPos": { "h": 8, "w": 6, "x": 18, "y": 10 },
       "id": 4,
@@ -469,46 +469,35 @@
           },
           "mappings": [],
           "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }] },
-          "unit": "short"
+          "unit": "reqpm"
         },
         "overrides": [
           {
-            "matcher": { "id": "byName", "options": "Max" },
-            "properties": [
-              { "id": "custom.lineStyle", "value": { "dash": [10, 10], "fill": "dash" } },
-              { "id": "color", "value": { "fixedColor": "red", "mode": "fixed" } }
-            ]
+            "matcher": { "id": "byName", "options": "CPU Circuit Breaker" },
+            "properties": [{ "id": "color", "value": { "fixedColor": "orange", "mode": "fixed" } }]
+          },
+          {
+            "matcher": { "id": "byName", "options": "Timeout" },
+            "properties": [{ "id": "color", "value": { "fixedColor": "red", "mode": "fixed" } }]
           }
         ]
       },
       "options": {
-        "legend": { "calcs": ["mean", "max"], "displayMode": "table", "placement": "bottom", "showLegend": true },
+        "legend": { "calcs": ["mean", "max", "sum"], "displayMode": "table", "placement": "bottom", "showLegend": true },
         "tooltip": { "mode": "multi", "sort": "desc" }
       },
       "targets": [
         {
           "datasource": { "type": "prometheus", "uid": "prometheus" },
-          "expr": "mysql_open_connections{service=\"internal\", instance=~\"$internal_instance\"}",
-          "legendFormat": "Open",
+          "expr": "rate(cpu_circuit_breaker_rejections_total{service=\"internal\", instance=~\"$internal_instance\"}[1m]) * 60",
+          "legendFormat": "CPU Circuit Breaker",
           "refId": "A"
         },
         {
           "datasource": { "type": "prometheus", "uid": "prometheus" },
-          "expr": "mysql_in_use_connections{service=\"internal\", instance=~\"$internal_instance\"}",
-          "legendFormat": "In Use",
+          "expr": "rate(timeout_rejections_total{service=\"internal\", instance=~\"$internal_instance\"}[1m]) * 60",
+          "legendFormat": "Timeout",
           "refId": "B"
-        },
-        {
-          "datasource": { "type": "prometheus", "uid": "prometheus" },
-          "expr": "mysql_idle_connections{service=\"internal\", instance=~\"$internal_instance\"}",
-          "legendFormat": "Idle",
-          "refId": "C"
-        },
-        {
-          "datasource": { "type": "prometheus", "uid": "prometheus" },
-          "expr": "mysql_max_open_connections{service=\"internal\", instance=~\"$internal_instance\"}",
-          "legendFormat": "Max",
-          "refId": "D"
         }
       ]
     },
@@ -724,7 +713,7 @@
     },
     {
       "datasource": { "type": "prometheus", "uid": "prometheus" },
-      "title": "MySQL Connection Pool",
+      "title": "Rejection Sources",
       "type": "timeseries",
       "gridPos": { "h": 8, "w": 6, "x": 18, "y": 19 },
       "id": 8,
@@ -749,46 +738,35 @@
           },
           "mappings": [],
           "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }] },
-          "unit": "short"
+          "unit": "reqpm"
         },
         "overrides": [
           {
-            "matcher": { "id": "byName", "options": "Max" },
-            "properties": [
-              { "id": "custom.lineStyle", "value": { "dash": [10, 10], "fill": "dash" } },
-              { "id": "color", "value": { "fixedColor": "red", "mode": "fixed" } }
-            ]
+            "matcher": { "id": "byName", "options": "CPU Circuit Breaker" },
+            "properties": [{ "id": "color", "value": { "fixedColor": "orange", "mode": "fixed" } }]
+          },
+          {
+            "matcher": { "id": "byName", "options": "Timeout" },
+            "properties": [{ "id": "color", "value": { "fixedColor": "red", "mode": "fixed" } }]
           }
         ]
       },
       "options": {
-        "legend": { "calcs": ["mean", "max"], "displayMode": "table", "placement": "bottom", "showLegend": true },
+        "legend": { "calcs": ["mean", "max", "sum"], "displayMode": "table", "placement": "bottom", "showLegend": true },
         "tooltip": { "mode": "multi", "sort": "desc" }
       },
       "targets": [
         {
           "datasource": { "type": "prometheus", "uid": "prometheus" },
-          "expr": "mysql_open_connections{service=\"external\", instance=~\"$external_instance\"}",
-          "legendFormat": "Open",
+          "expr": "rate(cpu_circuit_breaker_rejections_total{service=\"external\", instance=~\"$external_instance\"}[1m]) * 60",
+          "legendFormat": "CPU Circuit Breaker",
           "refId": "A"
         },
         {
           "datasource": { "type": "prometheus", "uid": "prometheus" },
-          "expr": "mysql_in_use_connections{service=\"external\", instance=~\"$external_instance\"}",
-          "legendFormat": "In Use",
+          "expr": "rate(timeout_rejections_total{service=\"external\", instance=~\"$external_instance\"}[1m]) * 60",
+          "legendFormat": "Timeout",
           "refId": "B"
-        },
-        {
-          "datasource": { "type": "prometheus", "uid": "prometheus" },
-          "expr": "mysql_idle_connections{service=\"external\", instance=~\"$external_instance\"}",
-          "legendFormat": "Idle",
-          "refId": "C"
-        },
-        {
-          "datasource": { "type": "prometheus", "uid": "prometheus" },
-          "expr": "mysql_max_open_connections{service=\"external\", instance=~\"$external_instance\"}",
-          "legendFormat": "Max",
-          "refId": "D"
         }
       ]
     }

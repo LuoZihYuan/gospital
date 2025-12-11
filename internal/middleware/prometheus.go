@@ -10,7 +10,6 @@ import (
 )
 
 var (
-	// Request metrics
 	HttpRequestsTotal = promauto.NewCounterVec(
 		prometheus.CounterOpts{
 			Name: "http_requests_total",
@@ -35,7 +34,6 @@ var (
 		},
 	)
 
-	// CPU Circuit breaker metrics
 	CpuCircuitBreakerState = promauto.NewGauge(
 		prometheus.GaugeOpts{
 			Name: "cpu_circuit_breaker_state",
@@ -57,7 +55,13 @@ var (
 		},
 	)
 
-	// Database circuit breaker metrics
+	TimeoutRejections = promauto.NewCounter(
+		prometheus.CounterOpts{
+			Name: "timeout_rejections_total",
+			Help: "Total number of requests rejected due to timeout",
+		},
+	)
+
 	MysqlCircuitBreakerState = promauto.NewGauge(
 		prometheus.GaugeOpts{
 			Name: "mysql_circuit_breaker_state",
@@ -73,10 +77,8 @@ var (
 	)
 )
 
-// PrometheusMiddleware collects HTTP metrics
 func PrometheusMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		// Skip metrics endpoint
 		if c.Request.URL.Path == "/metrics" {
 			c.Next()
 			return
@@ -98,7 +100,6 @@ func PrometheusMiddleware() gin.HandlerFunc {
 	}
 }
 
-// normalizePath returns a normalized path for metrics labels
 func normalizePath(path string) string {
 	if path == "" {
 		return "unknown"
@@ -106,7 +107,6 @@ func normalizePath(path string) string {
 	return path
 }
 
-// UpdateCPUCircuitBreakerMetrics updates CPU circuit breaker metrics
 func UpdateCPUCircuitBreakerMetrics(isOpen bool, currentCPU float64) {
 	if isOpen {
 		CpuCircuitBreakerState.Set(1)
@@ -116,13 +116,14 @@ func UpdateCPUCircuitBreakerMetrics(isOpen bool, currentCPU float64) {
 	CpuUsagePercent.Set(currentCPU)
 }
 
-// IncrementCPURejections increments the CPU circuit breaker rejection counter
 func IncrementCPURejections() {
 	CpuCircuitBreakerRejections.Inc()
 }
 
-// CircuitBreakerStateToInt converts gobreaker state to int for Prometheus
-// 0=closed, 1=half-open, 2=open
+func IncrementTimeoutRejections() {
+	TimeoutRejections.Inc()
+}
+
 func CircuitBreakerStateToInt(stateName string) float64 {
 	switch stateName {
 	case "closed":
@@ -136,12 +137,10 @@ func CircuitBreakerStateToInt(stateName string) float64 {
 	}
 }
 
-// UpdateMySQLCircuitBreakerState updates MySQL circuit breaker state metric
 func UpdateMySQLCircuitBreakerState(stateName string) {
 	MysqlCircuitBreakerState.Set(CircuitBreakerStateToInt(stateName))
 }
 
-// UpdateDynamoDBCircuitBreakerState updates DynamoDB circuit breaker state metric
 func UpdateDynamoDBCircuitBreakerState(stateName string) {
 	DynamodbCircuitBreakerState.Set(CircuitBreakerStateToInt(stateName))
 }
