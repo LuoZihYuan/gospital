@@ -6,6 +6,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"runtime"
 	"sync"
 	"time"
 
@@ -60,12 +61,12 @@ func NewCPUCircuitBreaker(overloadThreshold, recoveryThreshold float64) *CPUCirc
 	cb := &CPUCircuitBreaker{
 		overloadThreshold: overloadThreshold,
 		recoveryThreshold: recoveryThreshold,
-		checkInterval:     100 * time.Millisecond, // Check every 0.1 second for faster response
+		checkInterval:     100 * time.Millisecond,
 		isOpen:            false,
 		currentCPU:        0.0,
 		metadataURI:       metadataURI,
 		httpClient: &http.Client{
-			Timeout: 500 * time.Millisecond, // Reduced timeout for faster checks
+			Timeout: 500 * time.Millisecond,
 		},
 	}
 
@@ -76,10 +77,17 @@ func NewCPUCircuitBreaker(overloadThreshold, recoveryThreshold float64) *CPUCirc
 		}
 	}
 
-	go cb.monitorCPU()
+	if runtime.GOMAXPROCS(0) < 2 {
+		runtime.GOMAXPROCS(2)
+	}
 
-	log.Printf("[CPU Circuit Breaker] Initialized (overload: %.1f%%, recovery: %.1f%%, limit: %.2f vCPU, interval: %v)",
-		overloadThreshold, recoveryThreshold, cb.taskCPULimit, cb.checkInterval)
+	go func() {
+		runtime.LockOSThread()
+		cb.monitorCPU()
+	}()
+
+	log.Printf("[CPU Circuit Breaker] Initialized (overload: %.1f%%, recovery: %.1f%%, limit: %.2f vCPU, interval: %v, GOMAXPROCS: %d)",
+		overloadThreshold, recoveryThreshold, cb.taskCPULimit, cb.checkInterval, runtime.GOMAXPROCS(0))
 
 	return cb
 }
@@ -134,7 +142,6 @@ func (cb *CPUCircuitBreaker) monitorCPU() {
 			cb.isOpen = false
 		}
 
-		// Update Prometheus metrics
 		UpdateCPUCircuitBreakerMetrics(cb.isOpen, cb.currentCPU)
 
 		cb.mu.Unlock()
@@ -215,7 +222,6 @@ func (cb *CPUCircuitBreaker) GetCurrentCPU() float64 {
 func CPUCircuitBreakerMiddleware(cb *CPUCircuitBreaker) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		if cb.IsOpen() {
-			// Increment rejection counter for Prometheus
 			IncrementCPURejections()
 
 			c.JSON(http.StatusServiceUnavailable, models.ErrorResponse{
